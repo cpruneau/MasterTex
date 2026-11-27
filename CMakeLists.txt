@@ -23,6 +23,8 @@ set(SOURCES
     src/Dialogs.cpp
     src/Restructure.cpp
     src/RestructureDialog.cpp
+    src/BookTools.cpp
+    src/BookToolsUi.cpp
 )
 
 set(HEADERS
@@ -39,6 +41,8 @@ set(HEADERS
     src/Dialogs.h
     src/Restructure.h
     src/RestructureDialog.h
+    src/BookTools.h
+    src/BookToolsUi.h
 )
 
 if(APPLE)

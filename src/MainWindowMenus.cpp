@@ -6,6 +6,7 @@
 #include "CodeEditor.h"
 #include "Dialogs.h"
 #include "FindBar.h"
+#include "BookToolsUi.h"
 #include "Project.h"
 #include "SettingsDialog.h"
 #include "SymbolPanel.h"
@@ -233,6 +234,12 @@ void MainWindow::createEditMenu()
     replace->addAction(act(tr("Replace Next"), QKeySequence(), withFind([](FindBar *f) { f->showBar(true); f->replaceNext(false); })));
     replace->addAction(act(tr("Replace Previous"), QKeySequence(), withFind([](FindBar *f) { f->showBar(true); f->replaceNext(true); })));
     replace->addAction(act(tr("Replace All"), QKeySequence(), withFind([](FindBar *f) { f->showBar(true); f->replaceAll(); })));
+    replace->addSeparator();
+    replace->addAction(act(tr("Replace in All Files…"), QKeySequence("Ctrl+Shift+F"), [this]() { replaceInAllFiles(); }));
+    edit->addAction(act(tr("Replace in All Files…"), QKeySequence(), [this]() { replaceInAllFiles(); }));
+    QMenu *rebase = edit->addMenu(tr("Rebase Labels"));
+    rebase->addAction(act(tr("Rebase (Current File)…"), QKeySequence(), [this]() { rebaseLabels(true); }));
+    rebase->addAction(act(tr("Rebase All Files…"), QKeySequence(), [this]() { rebaseLabels(false); }));
 
     // Go to
     QMenu *go = edit->addMenu(tr("Go To"));
@@ -321,7 +328,14 @@ void MainWindow::createToolsMenu()
 
     tools->addSeparator();
     tools->addAction(act(tr("Restructure Document…"), QKeySequence("Ctrl+Alt+T"), [this]() { restructure(); }));
-    tools->addAction(act(tr("Undo Last Restructure…"), QKeySequence(), [this]() { undoRestructure(); }));
+    tools->addAction(act(tr("Undo Last Book-Wide Change…"), QKeySequence(), [this]() { undoRestructure(); }));
+    tools->addSeparator();
+    QMenu *checks = tools->addMenu(tr("Checks"));
+    checks->addAction(act(tr("Check Eqs"), QKeySequence(), [this]() { showChecks(); m_checks->runCheck(BookTools::CheckKind::Equations); }));
+    checks->addAction(act(tr("Check Tabs"), QKeySequence(), [this]() { showChecks(); m_checks->runCheck(BookTools::CheckKind::Tables); }));
+    checks->addAction(act(tr("Check Figs"), QKeySequence(), [this]() { showChecks(); m_checks->runCheck(BookTools::CheckKind::Figures); }));
+    checks->addSeparator();
+    checks->addAction(act(tr("Check / Fix Figure Files…"), QKeySequence(), [this]() { showChecks(); m_checks->runFigureFiles(); }));
     tools->addSeparator();
     tools->addAction(act(tr("Clean Auxiliary Files"), QKeySequence(), [this]() { cleanBuild(); }));
     tools->addAction(act(tr("Open External Terminal"), QKeySequence(), [this]() { openTerminal(); }));

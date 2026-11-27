@@ -845,6 +845,7 @@ Plan makePlan(const Model &m, const Tree &tree, bool moveExclusiveFigures)
     if (headingEdits) plan.steps << QString("Change %1 sectioning command%2 to their new level").arg(headingEdits).arg(headingEdits > 1 ? "s" : "");
     if (pathEdits) plan.steps << QString("Rewrite %1 path%2 (\\input, \\includegraphics …) in %3 file%4, commented-out lines included")
                                      .arg(pathEdits).arg(pathEdits > 1 ? "s" : "").arg(pathFiles).arg(pathFiles > 1 ? "s" : "");
+    plan.title = "Restructure";
     plan.steps << QString("Edit %1 file%2 in all; labels, \\ref and \\cite need no changes")
                       .arg(plan.newContents.size()).arg(plan.newContents.size() == 1 ? "" : "s");
     return plan;
@@ -914,7 +915,8 @@ Result apply(const Model &m, const Plan &plan, bool gitCommit)
         written.append(w);
     }
 
-    if (gitCommit && isGitRepo(m.root)) runGit(m.root, "MasterTex: before restructure " + stamp);
+    const QString what = plan.title.isEmpty() ? QString("restructure") : plan.title;
+    if (gitCommit && isGitRepo(m.root)) runGit(m.root, "MasterTex: before " + what + " " + stamp);
 
     // Order: stage deepest sources first, place shallowest destinations first.
     QVector<Relocation> rels = plan.relocations;
@@ -936,6 +938,7 @@ Result apply(const Model &m, const Plan &plan, bool gitCommit)
     auto saveJournal = [&](const QString &state) {
         QJsonObject j;
         j["stamp"] = stamp;
+        j["title"] = plan.title.isEmpty() ? QString("Restructure") : plan.title;
         j["root"] = m.root;
         j["state"] = state;
         j["moves"] = moves;
@@ -997,7 +1000,7 @@ Result apply(const Model &m, const Plan &plan, bool gitCommit)
     }
     QDir(J + "/staging").removeRecursively();   // empty by now
     saveJournal("applied");
-    if (gitCommit && isGitRepo(m.root)) runGit(m.root, "MasterTex: restructure " + stamp);
+    if (gitCommit && isGitRepo(m.root)) runGit(m.root, "MasterTex: " + what + " " + stamp);
 
     for (int i = 0; i < rels.size(); ++i) res.pathMap.insert(rels[i].from, finals[i]);
     res.ok = true;
@@ -1024,8 +1027,9 @@ QString describeJournal(const QString &journalDir)
     if (!f.open(QIODevice::ReadOnly)) return {};
     const QJsonObject j = QJsonDocument::fromJson(f.readAll()).object();
     const QDateTime when = QDateTime::fromString(j.value("stamp").toString(), "yyyyMMdd-HHmmss");
-    return QString("restructure of %1: %2 moved item(s), %3 edited file(s)")
-        .arg(QLocale().toString(when, QLocale::ShortFormat))
+    const QString title = j.value("title").toString().isEmpty() ? QString("Restructure") : j.value("title").toString();
+    return QString("“%1” of %2: %3 moved item(s), %4 edited file(s)")
+        .arg(title, QLocale().toString(when, QLocale::ShortFormat))
         .arg(j.value("moves").toArray().size())
         .arg(j.value("written").toArray().size());
 }
@@ -1086,7 +1090,7 @@ Result undo(const QString &J)
     if (f.open(QIODevice::WriteOnly)) { f.write(QJsonDocument(j).toJson()); f.close(); }
     QDir().rename(J, J + "-undone");
     const QString root = j.value("root").toString();
-    if (isGitRepo(root)) runGit(root, "MasterTex: undo restructure " + j.value("stamp").toString());
+    if (isGitRepo(root)) runGit(root, "MasterTex: undo " + j.value("title").toString() + " " + j.value("stamp").toString());
     for (const auto &p : mv) res.pathMap.insert(p.first, p.second);
     res.ok = true;
     return res;

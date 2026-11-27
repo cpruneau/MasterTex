@@ -67,6 +67,21 @@ build/MasterTex.app/Contents/MacOS/MasterTex --dump /path/to/your/main.tex
   Every restructure is journaled in `.mastertex/restructure/` inside the book: if anything fails it
   rolls back, and Tools › Undo Last Restructure restores the book exactly. In a Git repository it also
   commits before and after. Headings written inside a file (marked 🔒) can't be moved yet.
+- **Replace in All Files** (Edit, Shift+Cmd+F): search the whole book (optionally every .tex in the
+  folder), see every match with a checkbox, replace the checked ones in one undoable step.
+- **Rebase Labels** (Edit › Rebase Labels): rebuild labels as `type:Chapter:Section:Subsection:Name`, each level
+  a short name from its heading title (acronym in parentheses if any, else its first significant word; a section
+  never repeats its chapter's name; same-named siblings get initials, e.g. ChargeBF / ChargeC). Optionally start
+  with the Part and choose the depth (Section / Subsection / Subsubsection). One prefix per kind
+  (eq, sec, ch, part, fig, tab, prob, thm …). Current file or the whole book; every reference in every
+  .tex file of the folder follows. Clashes get -2, -3 …; labels defined twice point each reference to
+  the nearest definition. A review list goes to the Checks pane.
+- **Checks pane** (Tools › Checks): Check Eqs / Tabs / Figs (no label, label before caption, missing
+  caption, references to missing labels or to commented-out chapters, duplicates, unused labels) and
+  Figure Files (missing images — with the right file found by name and path, images living in another
+  chapter's folder, shared and unused images), with Fix Checked.
+- All book-wide changes (restructure, rebase, replace in all files, figure fixes) are journaled:
+  Tools › Undo Last Book-Wide Change restores them exactly.
 - **Issues** (bottom): missing files and images, duplicate labels, undefined references,
   citations missing from the bibliography, unused labels, and errors from the last build.
   Double-click to jump to the place.

@@ -8,6 +8,9 @@
 class CodeEditor;
 class FindBar;
 class PdfViewer;
+class ChecksPanel;
+class ReplaceAllDialog;
+namespace Restructure { struct Plan; }
 class Project;
 class StructurePanel;
 class SymbolPanel;
@@ -103,6 +106,10 @@ private:
     void viewPdf();
     void viewPdfExternal();
     void restructure();
+    bool applyPlan(const Restructure::Plan &plan);
+    void replaceInAllFiles();
+    void rebaseLabels(bool currentFileOnly);
+    void showChecks();
     void undoRestructure();
     void afterFilesChanged(const QHash<QString, QString> &pathMap, const QStringList &changedFiles);
     void syncToPdf(CodeEditor *e);
@@ -135,6 +142,9 @@ private:
     int m_dockCounter = 0;
     FindBar *m_findBar = nullptr;
     PdfViewer *m_pdf = nullptr;
+    ChecksPanel *m_checks = nullptr;
+    QDockWidget *m_checksDock = nullptr;
+    QPointer<ReplaceAllDialog> m_replaceAll;
     QDockWidget *m_pdfDock = nullptr;
     QTreeWidget *m_repetitions = nullptr;
     bool m_viewAfterBuild = false;

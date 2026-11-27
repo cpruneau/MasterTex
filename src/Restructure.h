@@ -69,6 +69,7 @@ struct Relocation {
 };
 
 struct Plan {
+    QString title;           // what this change is, for the journal and Undo ("Restructure", "Rebase labels" …)
     QStringList steps;       // human-readable, in order
     QStringList errors;      // any error blocks applying
     QStringList warnings;

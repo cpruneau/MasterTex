@@ -11,6 +11,7 @@
 #include "FindBar.h"
 #include "Restructure.h"
 #include "RestructureDialog.h"
+#include "BookToolsUi.h"
 #ifdef MASTERTEX_HAS_PDF
 #include "PdfViewer.h"
 #endif
@@ -345,6 +346,17 @@ void MainWindow::createDocks()
     m_messagesDock->setWidget(m_messageTabs);
     addDockWidget(Qt::BottomDockWidgetArea, m_messagesDock);
     resizeDocks({m_messagesDock}, {180}, Qt::Vertical);
+
+    // Checks pane (equations, tables, figures, figure files, rebase review)
+    m_checks = new ChecksPanel;
+    m_checks->setApplier([this](const Restructure::Plan &p) { return applyPlan(p); });
+    connect(m_checks, &ChecksPanel::openLocation, this, [this](const QString &f, int l) { openFile(f, l); });
+    m_checksDock = new QDockWidget(tr("Checks"), this);
+    m_checksDock->setObjectName("ChecksDock");
+    m_checksDock->setWidget(m_checks);
+    addDockWidget(Qt::BottomDockWidgetArea, m_checksDock);
+    tabifyDockWidget(m_messagesDock, m_checksDock);
+    m_messagesDock->raise();
 }
 
 void MainWindow::createToolBars()
@@ -414,6 +426,7 @@ void MainWindow::setProject(const QString &masterFile)
     m_project = Project::acquire(key);
     connect(m_project, &Project::changed, this, &MainWindow::updateIssues);
     m_structure->setProject(m_project);
+    m_checks->setMaster(m_project->masterFile());
 
     const QString root = m_project->rootDir();
     m_fsModel->setRootPath(root);
@@ -1018,7 +1031,7 @@ void MainWindow::undoRestructure()
     if (!ensureProject()) return;
     const QString J = Restructure::lastJournal(m_project->rootDir());
     if (J.isEmpty()) {
-        QMessageBox::information(this, tr("Undo Restructure"), tr("There is no restructure to undo in this book."));
+        QMessageBox::information(this, tr("Undo"), tr("There is no book-wide change (restructure, rebase, replace in all files, figure fix) to undo."));
         return;
     }
     if (!saveAll()) return;
@@ -1039,6 +1052,66 @@ void MainWindow::undoRestructure()
     }
     afterFilesChanged(r.pathMap, r.changedFiles);
     statusBar()->showMessage(tr("Restructure undone — the book is back as it was."), 8000);
+}
+
+bool MainWindow::applyPlan(const Restructure::Plan &plan)
+{
+    if (!m_project || plan.isEmpty()) return false;
+    if (!saveAll()) return false;
+    Restructure::Model m;
+    m.root = m_project->rootDir();
+    m.master = m_project->masterFile();
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const Restructure::Result r = Restructure::apply(m, plan, Restructure::isGitRepo(m.root));
+    QApplication::restoreOverrideCursor();
+    if (!r.ok) {
+        QMessageBox::critical(this, plan.title, tr("Nothing was changed: %1").arg(r.error));
+        return false;
+    }
+    afterFilesChanged(r.pathMap, r.changedFiles);
+    statusBar()->showMessage(tr("%1: %n file(s) changed. Tools › Undo Last Book-Wide Change puts them back.", nullptr,
+                                int(r.changedFiles.size())).arg(plan.title), 10000);
+    return true;
+}
+
+void MainWindow::replaceInAllFiles()
+{
+    if (!ensureProject()) return;
+    if (!saveAll()) return;
+    if (!m_replaceAll) {
+        m_replaceAll = new ReplaceAllDialog(m_project->masterFile(), [this](const Restructure::Plan &p) { return applyPlan(p); }, this);
+        m_replaceAll->setAttribute(Qt::WA_DeleteOnClose);
+        connect(m_replaceAll, &ReplaceAllDialog::openLocation, this, [this](const QString &f, int l) { openFile(f, l); });
+    }
+    CodeEditor *e = currentEditor();
+    m_replaceAll->setFindText(e ? e->textCursor().selectedText() : QString());
+    m_replaceAll->show();
+    m_replaceAll->raise();
+    m_replaceAll->activateWindow();
+}
+
+void MainWindow::rebaseLabels(bool currentFileOnly)
+{
+    if (!ensureProject()) return;
+    if (!saveAll()) return;
+    QString only;
+    if (currentFileOnly) {
+        CodeEditor *e = currentEditor();
+        if (!e) { statusBar()->showMessage(tr("Open the file to rebase first."), 4000); return; }
+        only = e->filePath();
+    }
+    RebaseDialog dlg(m_project->masterFile(), only, this);
+    connect(&dlg, &RebaseDialog::openLocation, this, [this](const QString &f, int l) { openFile(f, l); });
+    if (dlg.exec() != QDialog::Accepted) return;
+    if (!applyPlan(dlg.result().plan)) return;
+    m_checks->showRebaseReview(dlg.result().changes, dlg.result().skipped);
+    showChecks();
+}
+
+void MainWindow::showChecks()
+{
+    m_checksDock->show();
+    m_checksDock->raise();
 }
 
 void MainWindow::afterFilesChanged(const QHash<QString, QString> &pathMap, const QStringList &changedFiles)
