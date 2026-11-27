@@ -35,6 +35,11 @@ public:
     QString textFor(const QString &path, bool *exists = nullptr) const;
 
     QList<QTextDocument *> modifiedDocuments() const;
+    QStringList openPaths() const;
+
+    // After files were moved or rewritten on disk (restructuring):
+    void relocate(const QString &oldPath, const QString &newPath);   // file or folder
+    bool reloadFromDisk(const QString &path);
 
     // Crash recovery
     bool hasNewerAutosave(const QString &path) const;

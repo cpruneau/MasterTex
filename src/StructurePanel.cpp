@@ -11,6 +11,8 @@
 #include <QStyle>
 #include <QTabWidget>
 #include <QTreeWidget>
+#include <QHBoxLayout>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <QMap>
 #include <QScrollBar>
@@ -65,11 +67,19 @@ StructurePanel::StructurePanel(QWidget *parent) : QWidget(parent)
     m_filesState = new TreeState;
     m_refsState = new TreeState;
 
+    auto *top = new QHBoxLayout;
+    top->setContentsMargins(0, 0, 0, 0);
     m_filter = new QLineEdit(this);
     m_filter->setPlaceholderText(tr("Filter (title, label, key, file)…"));
     m_filter->setClearButtonEnabled(true);
     connect(m_filter, &QLineEdit::textChanged, this, &StructurePanel::applyFilter);
-    lay->addWidget(m_filter);
+    auto *restructure = new QToolButton(this);
+    restructure->setText(tr("Restructure…"));
+    restructure->setToolTip(tr("Rearrange parts, chapters and sections by dragging — files, folders, headings and paths follow"));
+    connect(restructure, &QToolButton::clicked, this, &StructurePanel::restructureRequested);
+    top->addWidget(m_filter, 1);
+    top->addWidget(restructure);
+    lay->addLayout(top);
 
     m_tabs = new QTabWidget(this);
     m_tabs->setDocumentMode(true);

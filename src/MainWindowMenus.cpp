@@ -320,6 +320,9 @@ void MainWindow::createToolsMenu()
     user->addAction(tr("User commands — coming in a later milestone"))->setEnabled(false);
 
     tools->addSeparator();
+    tools->addAction(act(tr("Restructure Document…"), QKeySequence("Ctrl+Alt+T"), [this]() { restructure(); }));
+    tools->addAction(act(tr("Undo Last Restructure…"), QKeySequence(), [this]() { undoRestructure(); }));
+    tools->addSeparator();
     tools->addAction(act(tr("Clean Auxiliary Files"), QKeySequence(), [this]() { cleanBuild(); }));
     tools->addAction(act(tr("Open External Terminal"), QKeySequence(), [this]() { openTerminal(); }));
     tools->addSeparator();

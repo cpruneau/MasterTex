@@ -21,6 +21,8 @@ set(SOURCES
     src/MainWindowMenus.cpp
     src/FindBar.cpp
     src/Dialogs.cpp
+    src/Restructure.cpp
+    src/RestructureDialog.cpp
 )
 
 set(HEADERS
@@ -35,6 +37,8 @@ set(HEADERS
     src/MainWindow.h
     src/FindBar.h
     src/Dialogs.h
+    src/Restructure.h
+    src/RestructureDialog.h
 )
 
 if(APPLE)

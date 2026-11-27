@@ -102,6 +102,9 @@ private:
     void cleanBuild();
     void viewPdf();
     void viewPdfExternal();
+    void restructure();
+    void undoRestructure();
+    void afterFilesChanged(const QHash<QString, QString> &pathMap, const QStringList &changedFiles);
     void syncToPdf(CodeEditor *e);
     QString pdfPath() const;
     void showSettings();

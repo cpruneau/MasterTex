@@ -56,6 +56,17 @@ build/MasterTex.app/Contents/MacOS/MasterTex --dump /path/to/your/main.tex
   (or Tools > Show Cursor Position in PDF, Cmd+Opt+P) scrolls the PDF there and highlights it.
   The pane reloads after each compile and keeps your page. Requires the Qt PDF module
   (Qt Maintenance Tool: Additional Libraries > Qt PDF); without it, View opens the system viewer.
+- **Restructure** (Structure pane › Restructure…, or Tools › Restructure Document…, Cmd+Opt+T):
+  drag chapters and section files in a draft of the book's tree — reorder them, move them to another
+  part or chapter, promote or demote them. Commented-out chapters are shown (greyed) and can move too.
+  The right-hand side lists every step Apply Changes will take: include lines moved between files,
+  chapter folders moved with all their contents (figures, papers, notes), section files given their
+  own chapter folder when promoted, headings shifted (\section → \chapter …), every path rewritten in
+  every file (commented lines too), figures used only by the moved text moved with it. Labels,
+  \ref and \cite need no change. Items keep their compiled/commented-out state.
+  Every restructure is journaled in `.mastertex/restructure/` inside the book: if anything fails it
+  rolls back, and Tools › Undo Last Restructure restores the book exactly. In a Git repository it also
+  commits before and after. Headings written inside a file (marked 🔒) can't be moved yet.
 - **Issues** (bottom): missing files and images, duplicate labels, undefined references,
   citations missing from the bibliography, unused labels, and errors from the last build.
   Double-click to jump to the place.

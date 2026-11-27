@@ -9,6 +9,8 @@
 #include "SymbolPanel.h"
 #include "Wizards.h"
 #include "FindBar.h"
+#include "Restructure.h"
+#include "RestructureDialog.h"
 #ifdef MASTERTEX_HAS_PDF
 #include "PdfViewer.h"
 #endif
@@ -267,6 +269,7 @@ void MainWindow::createDocks()
     m_structure = new StructurePanel;
     connect(m_structure, &StructurePanel::openLocation, this, [this](const QString &f, int l) { openFile(f, l); });
     connect(m_structure, &StructurePanel::openLocationInNewWindow, this, &MainWindow::openLocationInNewWindow);
+    connect(m_structure, &StructurePanel::restructureRequested, this, &MainWindow::restructure);
     auto *structDock = new QDockWidget(tr("Structure"), this);
     structDock->setObjectName("StructureDock");
     structDock->setWidget(m_structure);
@@ -973,6 +976,88 @@ void MainWindow::updateLogMarkers()
         }
         e->setLogMarkers(markers);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Restructuring
+
+void MainWindow::restructure()
+{
+    if (!ensureProject()) return;
+    if (m_build->state() != QProcess::NotRunning) {
+        statusBar()->showMessage(tr("Wait for the compile to finish first."), 5000);
+        return;
+    }
+    if (!saveAll()) return;
+
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const Restructure::Model model = Restructure::build(m_project->masterFile());
+    QApplication::restoreOverrideCursor();
+
+    RestructureDialog dlg(model, this);
+    if (dlg.exec() != QDialog::Accepted) return;
+
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const Restructure::Result r = Restructure::apply(model, dlg.plan(), dlg.gitCommit());
+    QApplication::restoreOverrideCursor();
+    if (!r.ok) {
+        QMessageBox::critical(this, tr("Restructure"),
+            tr("The restructure could not be completed, and everything was put back as it was.\n\n%1").arg(r.error));
+        return;
+    }
+    afterFilesChanged(r.pathMap, r.changedFiles);
+    auto answer = QMessageBox::question(this, tr("Restructure done"),
+        tr("%n file(s) edited and %1 item(s) moved.\n\nTools › Undo Last Restructure puts everything back exactly.\n\n"
+           "Compile now to check the result?", nullptr, int(r.changedFiles.size())).arg(r.pathMap.size()),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+    if (answer == QMessageBox::Yes) runBuild(true);
+}
+
+void MainWindow::undoRestructure()
+{
+    if (!ensureProject()) return;
+    const QString J = Restructure::lastJournal(m_project->rootDir());
+    if (J.isEmpty()) {
+        QMessageBox::information(this, tr("Undo Restructure"), tr("There is no restructure to undo in this book."));
+        return;
+    }
+    if (!saveAll()) return;
+    QString text = tr("Undo the %1?\n\nFiles and folders go back where they were and every edited file gets its "
+                      "original text back.").arg(Restructure::describeJournal(J));
+    const QStringList edited = Restructure::editedSince(J);
+    if (!edited.isEmpty())
+        text += tr("\n\nCaution: you have edited these files since then, and those edits would be lost:\n%1")
+                    .arg(edited.join("\n"));
+    if (QMessageBox::question(this, tr("Undo Restructure"), text) != QMessageBox::Yes) return;
+
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const Restructure::Result r = Restructure::undo(J);
+    QApplication::restoreOverrideCursor();
+    if (!r.ok) {
+        QMessageBox::critical(this, tr("Undo Restructure"), tr("Undo stopped: %1").arg(r.error));
+        return;
+    }
+    afterFilesChanged(r.pathMap, r.changedFiles);
+    statusBar()->showMessage(tr("Restructure undone — the book is back as it was."), 8000);
+}
+
+void MainWindow::afterFilesChanged(const QHash<QString, QString> &pathMap, const QStringList &changedFiles)
+{
+    auto *docs = DocumentManager::instance();
+    // Longest (most specific) moves first so files that left a moving folder follow their own move.
+    QStringList froms = pathMap.keys();
+    std::sort(froms.begin(), froms.end(), [](const QString &a, const QString &b) { return a.size() > b.size(); });
+    for (const QString &open : docs->openPaths()) {
+        for (const QString &from : froms) {
+            if (open == from || open.startsWith(from + "/")) {
+                docs->relocate(open, pathMap.value(from) + open.mid(from.size()));
+                break;
+            }
+        }
+    }
+    for (const QString &f : changedFiles) docs->reloadFromDisk(f);
+    if (m_project) m_project->reparse();
+    updateTabTitles();
 }
 
 QString MainWindow::pdfPath() const

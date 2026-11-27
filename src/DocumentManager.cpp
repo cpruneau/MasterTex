@@ -173,6 +173,38 @@ QList<QTextDocument *> DocumentManager::modifiedDocuments() const
     return out;
 }
 
+QStringList DocumentManager::openPaths() const
+{
+    return m_entries.keys();
+}
+
+void DocumentManager::relocate(const QString &oldPath, const QString &newPath)
+{
+    const QStringList keys = m_entries.keys();
+    for (const QString &k : keys) {
+        if (k != oldPath && !k.startsWith(oldPath + "/")) continue;
+        const QString nk = newPath + k.mid(oldPath.size());
+        Entry e = m_entries.take(k);
+        discardAutosave(k);
+        m_entries.insert(nk, e);
+        m_paths.insert(e.doc, nk);
+        emit documentRenamed(k, nk);
+    }
+}
+
+bool DocumentManager::reloadFromDisk(const QString &path)
+{
+    QTextDocument *doc = find(path);
+    if (!doc) return false;
+    QString text;
+    if (!readFile(m_paths.value(doc), &text, nullptr)) return false;
+    doc->setPlainText(text);
+    doc->setModified(false);
+    discardAutosave(m_paths.value(doc));
+    emit documentSaved(m_paths.value(doc));
+    return true;
+}
+
 QString DocumentManager::autosavePath(const QString &path) const
 {
     QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/autosave";

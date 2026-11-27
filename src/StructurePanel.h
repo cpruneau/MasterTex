@@ -26,6 +26,7 @@ public:
 signals:
     void openLocation(const QString &file, int line);
     void openLocationInNewWindow(const QString &file, int line);
+    void restructureRequested();
 
 private:
     QTreeWidget *makeTree();
