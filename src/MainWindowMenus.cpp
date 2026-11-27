@@ -284,6 +284,10 @@ void MainWindow::createToolsMenu()
     tools->addAction(m_runAllAct);
     tools->addAction(m_stopAct);
     tools->addAction(m_a["viewPdf"]);
+    tools->addAction(act(tr("Show Cursor Position in PDF"), QKeySequence("Ctrl+Alt+P"), [this]() {
+        syncToPdf(currentEditor());
+    }));
+    tools->addAction(act(tr("View PDF in External Viewer"), QKeySequence(), [this]() { viewPdfExternal(); }));
     tools->addSeparator();
     tools->addAction(act(tr("&Bibliography"), QKeySequence(), [this]() { runAuxTool("bibliography"); }));
     tools->addAction(act(tr("&Glossary"), QKeySequence(), [this]() { runAuxTool("glossary"); }));

@@ -9,6 +9,9 @@
 #include "SymbolPanel.h"
 #include "Wizards.h"
 #include "FindBar.h"
+#ifdef MASTERTEX_HAS_PDF
+#include "PdfViewer.h"
+#endif
 
 #include <QAction>
 #include <QApplication>
@@ -165,6 +168,10 @@ MainWindow::MainWindow(const QString &projectMaster, QWidget *parent) : QMainWin
         m_stopAct->setEnabled(false);
         if (!ok && m_latexRun) m_messageTabs->setCurrentIndex(0);
         if (ok && m_viewAfterBuild) viewPdf();
+#ifdef MASTERTEX_HAS_PDF
+        else if (m_latexRun && m_pdfDock->isVisible() && QFileInfo::exists(pdfPath()))
+            m_pdf->load(pdfPath());   // refresh the pane, keeping the page you were on
+#endif
         m_viewAfterBuild = false;
     });
     connect(m_build, &QProcess::errorOccurred, this, [this](QProcess::ProcessError err) {
@@ -276,6 +283,21 @@ void MainWindow::createDocks()
     symDock->setWidget(m_symbols);
     addDockWidget(Qt::RightDockWidgetArea, symDock);
     symDock->hide();
+
+#ifdef MASTERTEX_HAS_PDF
+    // Built-in PDF pane
+    m_pdf = new PdfViewer;
+    connect(m_pdf, &PdfViewer::sourceRequested, this, [this](const QString &file, int line) {
+        if (openFile(file, line)) { raise(); activateWindow(); }
+    });
+    connect(m_pdf, &PdfViewer::message, this, [this](const QString &m) { statusBar()->showMessage(m, 6000); });
+    m_pdfDock = new QDockWidget(tr("PDF"), this);
+    m_pdfDock->setObjectName("PdfDock");
+    m_pdfDock->setWidget(m_pdf);
+    addDockWidget(Qt::RightDockWidgetArea, m_pdfDock);
+    resizeDocks({m_pdfDock}, {620}, Qt::Horizontal);
+    m_pdfDock->hide();
+#endif
 
     // Messages: issues + build log
     m_issues = new QTreeWidget;
@@ -546,6 +568,7 @@ CodeEditor *MainWindow::openFile(const QString &path, int line)
 
     if (line > 0) rememberPosition();
     auto *editor = new CodeEditor(doc);
+    connect(editor, &CodeEditor::syncToPdfRequested, this, [this, editor]() { syncToPdf(editor); });
     const int idx = m_tabs->addTab(editor, QFileInfo(key).fileName());
     m_tabs->setTabToolTip(idx, key);
     connect(doc, &QTextDocument::modificationChanged, this, &MainWindow::updateTabTitles, Qt::UniqueConnection);
@@ -952,15 +975,51 @@ void MainWindow::updateLogMarkers()
     }
 }
 
+QString MainWindow::pdfPath() const
+{
+    return m_project ? m_project->rootDir() + "/" + m_project->name() + ".pdf" : QString();
+}
+
 void MainWindow::viewPdf()
 {
     if (!ensureProject()) return;
-    const QString pdf = m_project->rootDir() + "/" + m_project->name() + ".pdf";
+    const QString pdf = pdfPath();
     if (!QFileInfo::exists(pdf)) {
         statusBar()->showMessage(tr("No PDF yet — run the build first (Tools > Compile)."), 5000);
         return;
     }
+#ifdef MASTERTEX_HAS_PDF
+    m_pdfDock->show();
+    m_pdfDock->raise();
+    m_pdf->load(pdf);
+#else
     QDesktopServices::openUrl(QUrl::fromLocalFile(pdf));
+#endif
+}
+
+void MainWindow::viewPdfExternal()
+{
+    if (!ensureProject()) return;
+    if (QFileInfo::exists(pdfPath())) QDesktopServices::openUrl(QUrl::fromLocalFile(pdfPath()));
+    else statusBar()->showMessage(tr("No PDF yet — run the build first (Tools > Compile)."), 5000);
+}
+
+void MainWindow::syncToPdf(CodeEditor *e)
+{
+#ifdef MASTERTEX_HAS_PDF
+    if (!e || !ensureProject()) return;
+    if (!QFileInfo::exists(pdfPath())) {
+        statusBar()->showMessage(tr("No PDF yet — run the build first (Tools > Compile)."), 5000);
+        return;
+    }
+    m_pdfDock->show();
+    m_pdfDock->raise();
+    if (!m_pdf->isLoaded() || m_pdf->pdfPath() != pdfPath()) m_pdf->load(pdfPath());
+    m_pdf->forwardSearch(e->filePath(), e->currentLine(), e->textCursor().positionInBlock() + 1);
+#else
+    Q_UNUSED(e);
+    statusBar()->showMessage(tr("This MasterTex was built without the Qt PDF module, so there is no PDF pane."), 6000);
+#endif
 }
 
 void MainWindow::viewLog()

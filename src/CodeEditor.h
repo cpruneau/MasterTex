@@ -51,12 +51,18 @@ public:
     void setLogMarkers(const QHash<int, int> &markers);
 
     int lineNumberAreaWidth() const;
+signals:
+    // Cmd-click (Ctrl-click elsewhere): show this spot in the PDF.
+    void syncToPdfRequested();
+
+public:
     void paintLineNumbers(QPaintEvent *event);
 
 protected:
     void resizeEvent(QResizeEvent *e) override;
     void focusInEvent(QFocusEvent *e) override;
     void keyPressEvent(QKeyEvent *e) override;
+    void mousePressEvent(QMouseEvent *e) override;
 
 private:
     void updateLineNumberAreaWidth();

@@ -2,6 +2,7 @@
 #include "DocumentManager.h"
 
 #include <QFontDatabase>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QRegularExpression>
 #include <QSet>
@@ -161,6 +162,13 @@ void CodeEditor::keyPressEvent(QKeyEvent *e)
         return;
     }
     QPlainTextEdit::keyPressEvent(e);
+}
+
+void CodeEditor::mousePressEvent(QMouseEvent *e)
+{
+    QPlainTextEdit::mousePressEvent(e);   // moves the cursor to the click
+    if (e->button() == Qt::LeftButton && (e->modifiers() & Qt::ControlModifier))
+        emit syncToPdfRequested();
 }
 
 void CodeEditor::paintLineNumbers(QPaintEvent *event)

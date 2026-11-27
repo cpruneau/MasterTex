@@ -47,3 +47,16 @@ else()
 endif()
 
 target_link_libraries(MasterTex PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets)
+
+# Built-in PDF pane with SyncTeX. Needs the "Qt PDF" module (Qt Maintenance Tool:
+# Qt 6.x > Additional Libraries > Qt PDF). Without it, PDFs open in the system viewer.
+find_package(Qt6 QUIET OPTIONAL_COMPONENTS Pdf)
+if(Qt6Pdf_FOUND)
+    target_sources(MasterTex PRIVATE src/PdfViewer.cpp src/PdfViewer.h)
+    target_link_libraries(MasterTex PRIVATE Qt6::Pdf)
+    target_compile_definitions(MasterTex PRIVATE MASTERTEX_HAS_PDF)
+    message(STATUS "MasterTex: built-in PDF pane enabled (Qt PDF found)")
+else()
+    message(WARNING "MasterTex: Qt PDF not found — the built-in PDF pane is disabled. "
+                    "Install it with the Qt Maintenance Tool (Additional Libraries > Qt PDF).")
+endif()

@@ -7,6 +7,7 @@
 
 class CodeEditor;
 class FindBar;
+class PdfViewer;
 class Project;
 class StructurePanel;
 class SymbolPanel;
@@ -100,6 +101,9 @@ private:
     void runAuxTool(const QString &tool);   // "bibliography", "glossary", "index"
     void cleanBuild();
     void viewPdf();
+    void viewPdfExternal();
+    void syncToPdf(CodeEditor *e);
+    QString pdfPath() const;
     void showSettings();
     void about();
     void zoom(int delta);
@@ -127,6 +131,8 @@ private:
     QHash<CodeEditor *, QDockWidget *> m_undocked;
     int m_dockCounter = 0;
     FindBar *m_findBar = nullptr;
+    PdfViewer *m_pdf = nullptr;
+    QDockWidget *m_pdfDock = nullptr;
     QTreeWidget *m_repetitions = nullptr;
     bool m_viewAfterBuild = false;
     bool m_latexRun = false;

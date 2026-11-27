@@ -51,6 +51,11 @@ build/MasterTex.app/Contents/MacOS/MasterTex --dump /path/to/your/main.tex
   to give that file its own window. Close that window, or use View > Dock Editor Back (Shift+Cmd+J),
   to return it to the tabs. Drag an undocked editor onto an edge of the main window to place it side
   by side with the tabs. Menus, shortcuts and the find bar act on whichever editor you are typing in.
+- **PDF pane with SyncTeX**: View (Shift+Cmd+V) shows the PDF inside MasterTex.
+  Cmd-click or double-click in the PDF jumps to that line of the source; Cmd-click in the editor
+  (or Tools > Show Cursor Position in PDF, Cmd+Opt+P) scrolls the PDF there and highlights it.
+  The pane reloads after each compile and keeps your page. Requires the Qt PDF module
+  (Qt Maintenance Tool: Additional Libraries > Qt PDF); without it, View opens the system viewer.
 - **Issues** (bottom): missing files and images, duplicate labels, undefined references,
   citations missing from the bibliography, unused labels, and errors from the last build.
   Double-click to jump to the place.
