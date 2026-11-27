@@ -47,6 +47,10 @@ build/MasterTex.app/Contents/MacOS/MasterTex --dump /path/to/your/main.tex
 - **Multiple windows**: File > New Window, File > Move Tab to New Window, or right-click
   "Open in New Window". All windows on the same file share one document: edits, undo and
   the unsaved marker stay in sync everywhere.
+- **Undocking**: double-click a tab (or right-click > Undock, or View > Undock Editor, Shift+Cmd+U)
+  to give that file its own window. Close that window, or use View > Dock Editor Back (Shift+Cmd+J),
+  to return it to the tabs. Drag an undocked editor onto an edge of the main window to place it side
+  by side with the tabs. Menus, shortcuts and the find bar act on whichever editor you are typing in.
 - **Issues** (bottom): missing files and images, duplicate labels, undefined references,
   citations missing from the bibliography, unused labels, and errors from the last build.
   Double-click to jump to the place.

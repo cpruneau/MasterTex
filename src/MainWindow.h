@@ -57,6 +57,15 @@ private:
     // helpers
     CodeEditor *currentEditor() const;
     CodeEditor *editorAt(int index) const;
+    QList<CodeEditor *> allEditors() const;          // tabbed and undocked
+    void setActiveEditor(CodeEditor *e);
+
+    // Undocked editors live in their own floating dock windows.
+    void undockEditor(CodeEditor *e);
+    void dockBack(CodeEditor *e);
+    void dockAllBack();
+    bool isUndocked(CodeEditor *e) const { return m_undocked.contains(e); }
+    bool closeEditor(CodeEditor *e);
     QAction *act(const QString &text, const QKeySequence &key, std::function<void()> fn,
                  const QIcon &icon = QIcon());
     void insert(const QString &snippet);
@@ -114,6 +123,9 @@ private:
     QMenu *m_recentMenu = nullptr;
     QMenu *m_viewMenu = nullptr;
     QMetaObject::Connection m_cursorConn;
+    QPointer<CodeEditor> m_activeEditor;
+    QHash<CodeEditor *, QDockWidget *> m_undocked;
+    int m_dockCounter = 0;
     FindBar *m_findBar = nullptr;
     QTreeWidget *m_repetitions = nullptr;
     bool m_viewAfterBuild = false;

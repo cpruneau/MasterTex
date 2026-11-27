@@ -121,7 +121,7 @@ void MainWindow::createFileMenu()
         const int line = e->currentLine();
         MainWindow *w = newWindow(m_project ? m_project->masterFile() : QString());
         w->openFile(path, line);
-        closeTab(m_tabs->indexOf(e));
+        closeEditor(e);
     }));
     file->addSeparator();
     m_a["save"] = act(tr("&Save"), QKeySequence::Save, [this]() {
@@ -135,7 +135,7 @@ void MainWindow::createFileMenu()
     file->addAction(m_a["saveAs"]);
     file->addAction(m_a["saveAll"]);
     file->addSeparator();
-    m_a["close"] = act(tr("&Close File"), QKeySequence::Close, [this]() { closeTab(m_tabs->currentIndex()); },
+    m_a["close"] = act(tr("&Close File"), QKeySequence::Close, [this]() { closeEditor(currentEditor()); },
                        st->standardIcon(QStyle::SP_DialogCloseButton));
     file->addAction(m_a["close"]);
     file->addAction(act(tr("Close Window"), QKeySequence("Ctrl+Shift+W"), [this]() { close(); }));
@@ -632,6 +632,17 @@ void MainWindow::createOtherMenus()
 
     m_viewMenu = menuBar()->addMenu(tr("&View"));
     for (QDockWidget *d : findChildren<QDockWidget *>()) m_viewMenu->addAction(d->toggleViewAction());
+    m_viewMenu->addSeparator();
+    m_viewMenu->addAction(act(tr("Undock Editor"), QKeySequence("Ctrl+Shift+U"), [this]() {
+        CodeEditor *e = currentEditor();
+        if (!e) return;
+        if (isUndocked(e)) statusBar()->showMessage(tr("This editor is already undocked."), 3000);
+        else undockEditor(e);
+    }));
+    m_viewMenu->addAction(act(tr("Dock Editor Back"), QKeySequence("Ctrl+Shift+J"), [this]() {
+        if (CodeEditor *e = currentEditor()) dockBack(e);
+    }));
+    m_viewMenu->addAction(act(tr("Dock All Editors Back"), QKeySequence(), [this]() { dockAllBack(); }));
     m_viewMenu->addSeparator();
     m_viewMenu->addAction(act(tr("Zoom &In"), QKeySequence::ZoomIn, [this]() { zoom(+1); }));
     m_viewMenu->addAction(act(tr("Zoom &Out"), QKeySequence::ZoomOut, [this]() { zoom(-1); }));

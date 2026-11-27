@@ -33,6 +33,7 @@
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QStyle>
+#include <QTabBar>
 #include <QTabWidget>
 #include <QTextBlock>
 #include <QTextDocument>
@@ -54,6 +55,21 @@ static const QSet<QString> &textExtensions()
     return s;
 }
 
+
+// A floating window holding an undocked editor. Its close button docks the
+// editor back into the tabs instead of closing the file.
+class EditorDock : public QDockWidget {
+public:
+    using QDockWidget::QDockWidget;
+    std::function<void()> onClose;
+
+protected:
+    void closeEvent(QCloseEvent *e) override
+    {
+        e->ignore();
+        if (onClose) onClose();
+    }
+};
 
 // The master file for a .tex file: a "% !TEX root = ..." line wins; otherwise the
 // file itself if it contains \documentclass; otherwise empty.
@@ -100,20 +116,35 @@ MainWindow::MainWindow(const QString &projectMaster, QWidget *parent) : QMainWin
     centralLayout->addWidget(m_findBar);
     setCentralWidget(central);
     connect(m_tabs, &QTabWidget::tabCloseRequested, this, [this](int i) { closeTab(i); });
-    connect(m_tabs, &QTabWidget::currentChanged, this, [this]() {
-        updateTitle();
-        m_findBar->setEditor(currentEditor());
-        disconnect(m_cursorConn);
-        if (CodeEditor *ed = currentEditor()) {
-            auto update = [this, ed]() {
-                QTextCursor c = ed->textCursor();
-                m_status->setText(tr("Line %1, Col %2").arg(c.blockNumber() + 1).arg(c.positionInBlock() + 1));
-            };
-            m_cursorConn = connect(ed, &QPlainTextEdit::cursorPositionChanged, this, update);
-            update();
-        } else {
-            m_status->clear();
-        }
+    connect(m_tabs, &QTabWidget::currentChanged, this, [this]() { setActiveEditor(editorAt(m_tabs->currentIndex())); });
+    // Double-click a tab to undock it; right-click for more.
+    connect(m_tabs, &QTabWidget::tabBarDoubleClicked, this, [this](int i) {
+        if (CodeEditor *e = editorAt(i)) undockEditor(e);
+    });
+    m_tabs->tabBar()->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_tabs->tabBar(), &QWidget::customContextMenuRequested, this, [this](const QPoint &p) {
+        CodeEditor *e = editorAt(m_tabs->tabBar()->tabAt(p));
+        if (!e) return;
+        QMenu menu;
+        menu.addAction(tr("Undock into Its Own Window"), this, [this, e]() { undockEditor(e); });
+        menu.addAction(tr("Move to New MasterTex Window"), this, [this, e]() {
+            const QString path = e->filePath();
+            const int line = e->currentLine();
+            MainWindow *w = newWindow(m_project ? m_project->masterFile() : QString());
+            w->openFile(path, line);
+            closeEditor(e);
+        });
+        menu.addSeparator();
+        menu.addAction(tr("Close"), this, [this, e]() { closeEditor(e); });
+        menu.exec(m_tabs->tabBar()->mapToGlobal(p));
+    });
+    // The editor you are typing in — tabbed or undocked — is the one menus act on.
+    connect(qApp, &QApplication::focusChanged, this, [this](QWidget *, QWidget *now) {
+        for (QWidget *w = now; w; w = w->parentWidget())
+            if (auto *e = qobject_cast<CodeEditor *>(w)) {
+                if (allEditors().contains(e) && e != m_activeEditor) setActiveEditor(e);
+                return;
+            }
     });
 
     m_build = new QProcess(this);
@@ -165,9 +196,11 @@ MainWindow::MainWindow(const QString &projectMaster, QWidget *parent) : QMainWin
 
 MainWindow::~MainWindow()
 {
+    // Stop reacting to focus and tab changes while child widgets are torn down.
+    disconnect(qApp, nullptr, this, nullptr);
+    disconnect(m_tabs, nullptr, this, nullptr);
     auto *docs = DocumentManager::instance();
-    for (int i = 0; i < m_tabs->count(); ++i)
-        if (CodeEditor *ed = editorAt(i)) docs->release(ed->document());
+    for (CodeEditor *ed : allEditors()) docs->release(ed->document());
     if (m_project) Project::release(m_project);
 }
 
@@ -370,7 +403,7 @@ void MainWindow::setProject(const QString &masterFile)
     for (QWidget *w : QApplication::topLevelWidgets())
         if (auto *mw = qobject_cast<MainWindow *>(w)) mw->updateRecentMenu();
 
-    if (m_tabs->count() == 0) openFile(key);
+    if (allEditors().isEmpty()) openFile(key);
     updateIssues();
     updateTitle();
 }
@@ -397,22 +430,102 @@ CodeEditor *MainWindow::editorAt(int index) const
 
 CodeEditor *MainWindow::currentEditor() const
 {
+    if (m_activeEditor && (m_undocked.contains(m_activeEditor) || m_tabs->indexOf(m_activeEditor) >= 0))
+        return m_activeEditor;
     return qobject_cast<CodeEditor *>(m_tabs->currentWidget());
+}
+
+QList<CodeEditor *> MainWindow::allEditors() const
+{
+    QList<CodeEditor *> out;
+    for (int i = 0; i < m_tabs->count(); ++i)
+        if (CodeEditor *e = editorAt(i)) out << e;
+    for (CodeEditor *e : m_undocked.keys()) out << e;
+    return out;
+}
+
+void MainWindow::setActiveEditor(CodeEditor *ed)
+{
+    m_activeEditor = ed;
+    updateTitle();
+    m_findBar->setEditor(currentEditor());
+    disconnect(m_cursorConn);
+    if (ed) {
+        auto update = [this, ed]() {
+            QTextCursor c = ed->textCursor();
+            m_status->setText(tr("Line %1, Col %2").arg(c.blockNumber() + 1).arg(c.positionInBlock() + 1));
+        };
+        m_cursorConn = connect(ed, &QPlainTextEdit::cursorPositionChanged, this, update);
+        update();
+    } else {
+        m_status->clear();
+    }
+}
+
+void MainWindow::undockEditor(CodeEditor *e)
+{
+    const int idx = m_tabs->indexOf(e);
+    if (!e || idx < 0) return;
+    m_tabs->removeTab(idx);
+
+    auto *dock = new EditorDock(QFileInfo(e->filePath()).fileName(), this);
+    dock->setObjectName(QString("EditorDock-%1").arg(++m_dockCounter));
+    dock->setAttribute(Qt::WA_DeleteOnClose, false);
+    dock->setFeatures(QDockWidget::DockWidgetClosable | QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
+    dock->setWidget(e);
+    dock->onClose = [this, e]() { dockBack(e); };
+    addDockWidget(Qt::RightDockWidgetArea, dock);
+    dock->setFloating(true);
+    const int offset = 30 * (m_undocked.size() % 8);
+    dock->setGeometry(QRect(geometry().topLeft() + QPoint(120 + offset, 80 + offset), QSize(820, 900)));
+    m_undocked.insert(e, dock);
+    dock->show();
+    dock->raise();
+    dock->activateWindow();
+    e->setFocus();
+    setActiveEditor(e);
+    updateTabTitles();
+    statusBar()->showMessage(tr("Undocked %1 — close its window (or View > Dock Editor Back) to return it to the tabs; "
+                                "drag it onto an edge of this window to place it side by side.")
+                                 .arg(QFileInfo(e->filePath()).fileName()), 8000);
+}
+
+void MainWindow::dockBack(CodeEditor *e)
+{
+    QDockWidget *dock = m_undocked.take(e);
+    if (!dock) return;
+    e->setParent(nullptr);
+    const int idx = m_tabs->addTab(e, QFileInfo(e->filePath()).fileName());
+    m_tabs->setCurrentIndex(idx);
+    dock->deleteLater();
+    updateTabTitles();
+    e->setFocus();
+    setActiveEditor(e);
+}
+
+void MainWindow::dockAllBack()
+{
+    for (CodeEditor *e : m_undocked.keys()) dockBack(e);
 }
 
 CodeEditor *MainWindow::openFile(const QString &path, int line)
 {
     auto *docs = DocumentManager::instance();
     const QString key = DocumentManager::normalize(path);
-    for (int i = 0; i < m_tabs->count(); ++i) {
-        CodeEditor *e = editorAt(i);
-        if (e && e->filePath() == key) {
-            if (line > 0) rememberPosition();
-            m_tabs->setCurrentIndex(i);
-            if (line > 0) e->gotoLine(line);
-            else e->setFocus();
-            return e;
+    for (CodeEditor *e : allEditors()) {
+        if (e->filePath() != key) continue;
+        if (line > 0) rememberPosition();
+        if (QDockWidget *dock = m_undocked.value(e)) {
+            dock->show();
+            dock->raise();
+            dock->activateWindow();
+        } else {
+            m_tabs->setCurrentIndex(m_tabs->indexOf(e));
         }
+        setActiveEditor(e);
+        if (line > 0) e->gotoLine(line);
+        else e->setFocus();
+        return e;
     }
 
     QString err;
@@ -467,6 +580,9 @@ void MainWindow::updateTabTitles()
         m_tabs->setTabText(i, QFileInfo(path).fileName() + (e->document()->isModified() ? " •" : ""));
         m_tabs->setTabToolTip(i, path);
     }
+    for (auto it = m_undocked.cbegin(); it != m_undocked.cend(); ++it)
+        it.value()->setWindowTitle(QFileInfo(it.key()->filePath()).fileName()
+                                   + (it.key()->document()->isModified() ? " •" : ""));
     updateTitle();
 }
 
@@ -576,14 +692,25 @@ bool MainWindow::maybeSave(const QList<QTextDocument *> &docs)
 
 bool MainWindow::closeTab(int index)
 {
-    CodeEditor *e = editorAt(index);
+    return closeEditor(editorAt(index));
+}
+
+bool MainWindow::closeEditor(CodeEditor *e)
+{
     if (!e) return false;
     QTextDocument *doc = e->document();
     auto *docs = DocumentManager::instance();
     if (docs->refCount(doc) == 1 && !maybeSave({doc})) return false;
-    m_tabs->removeTab(index);
+    if (QDockWidget *dock = m_undocked.take(e)) {
+        e->setParent(nullptr);
+        dock->deleteLater();
+    } else {
+        m_tabs->removeTab(m_tabs->indexOf(e));
+    }
+    if (m_activeEditor == e) m_activeEditor = nullptr;
     e->deleteLater();
     docs->release(doc);
+    setActiveEditor(editorAt(m_tabs->currentIndex()));
     return true;
 }
 
@@ -592,9 +719,8 @@ void MainWindow::closeEvent(QCloseEvent *ev)
     // Only ask about documents that no other window still shows.
     auto *docs = DocumentManager::instance();
     QList<QTextDocument *> onlyHere;
-    for (int i = 0; i < m_tabs->count(); ++i)
-        if (CodeEditor *e = editorAt(i))
-            if (docs->refCount(e->document()) == 1) onlyHere << e->document();
+    for (CodeEditor *e : allEditors())
+        if (docs->refCount(e->document()) == 1) onlyHere << e->document();
     if (!maybeSave(onlyHere)) {
         ev->ignore();
         return;
@@ -814,9 +940,7 @@ void MainWindow::parseBuildLog()
 
 void MainWindow::updateLogMarkers()
 {
-    for (int i = 0; i < m_tabs->count(); ++i) {
-        CodeEditor *e = editorAt(i);
-        if (!e) continue;
+    for (CodeEditor *e : allEditors()) {
         QHash<int, int> markers;
         if (m_logMarkersOn) {
             const QString path = e->filePath();
@@ -991,16 +1115,14 @@ void MainWindow::showSettings()
     const int pt = QSettings().value("editor/fontSize", 13).toInt();
     for (QWidget *w : QApplication::topLevelWidgets())
         if (auto *mw = qobject_cast<MainWindow *>(w))
-            for (int i = 0; i < mw->m_tabs->count(); ++i)
-                if (CodeEditor *e = mw->editorAt(i)) e->setEditorFontSize(pt);
+            for (CodeEditor *e : mw->allEditors()) e->setEditorFontSize(pt);
 }
 
 void MainWindow::zoom(int delta)
 {
     const int pt = qBound(8, QSettings().value("editor/fontSize", 13).toInt() + delta, 32);
     QSettings().setValue("editor/fontSize", pt);
-    for (int i = 0; i < m_tabs->count(); ++i)
-        if (CodeEditor *e = editorAt(i)) e->setEditorFontSize(pt);
+    for (CodeEditor *e : allEditors()) e->setEditorFontSize(pt);
 }
 
 void MainWindow::about()
